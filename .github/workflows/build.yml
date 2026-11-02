@@ -19,13 +19,14 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '8.5'
 
     - name: Generate Source Code & Project
       run: |
         mkdir -p app/src/main/java/com/sensipro/pubg
-        mkdir -p app/src/main/res/values
 
         # 1. Root build.gradle
         cat << 'EOF' > build.gradle
@@ -50,13 +51,15 @@ jobs:
         # 2. settings.gradle
         cat << 'EOF' > settings.gradle
         include ':app'
-        rootProject.name = "PUBG Sensitivity Pro"
+        rootProject.name = "PUBGSensPro"
         EOF
 
         # 3. app/build.gradle
         cat << 'EOF' > app/build.gradle
-        apply plugin: 'com.android.application'
-        apply plugin: 'kotlin-android'
+        plugins {
+            id 'com.android.application'
+            id 'org.jetbrains.kotlin.android'
+        }
 
         android {
             namespace 'com.sensipro.pubg'
@@ -98,7 +101,6 @@ jobs:
             implementation 'androidx.compose.ui:ui'
             implementation 'androidx.compose.ui:ui-graphics'
             implementation 'androidx.compose.material3:material3'
-            implementation 'androidx.compose.material:material-icons-extended:1.6.1'
         }
         EOF
 
@@ -109,6 +111,7 @@ jobs:
             <application
                 android:allowBackup="true"
                 android:label="PUBG Sens Pro"
+                android:supportsRtl="true"
                 android:theme="@android:style/Theme.Material.NoActionBar">
                 <activity
                     android:name=".MainActivity"
@@ -192,11 +195,8 @@ jobs:
             }
 
             var useGyro by remember { mutableStateOf(true) }
-            var playstyle by remember { mutableStateOf("Spray Stabil (M416)") }
-            
             val mult = if (refreshRate >= 90) 0.92f else 1.05f
 
-            // Data Sensitivitas
             var tpp by remember { mutableStateOf((115 * mult).toInt()) }
             var redDot by remember { mutableStateOf((55 * mult).toInt()) }
             var scope3x by remember { mutableStateOf((28 * mult).toInt()) }
@@ -217,7 +217,7 @@ jobs:
                             colors = CardDefaults.cardColors(containerColor = CardBg)
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
-                                Text("GAYA BERMAIN & GYROSCOPE", color = GoldNeon, fontWeight = FontWeight.Bold)
+                                Text("PENGATURAN GYROSCOPE", color = GoldNeon, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("Aktifkan Gyroscope", color = Color.White, modifier = Modifier.weight(1f))
@@ -232,8 +232,8 @@ jobs:
                         Button(
                             onClick = {
                                 val text = """
-                                [PUBG SENSITIVITY PRO RESULT]
-                                HP: $brand $model (${refreshRate}Hz)
+                                [PUBG SENSITIVITY PRO]
+                                Perangkat: $brand $model (${refreshRate}Hz)
                                 TPP No Scope: $tpp%
                                 Red Dot: $redDot%
                                 3x Scope: $scope3x%
@@ -242,7 +242,7 @@ jobs:
                                 """.trimIndent()
                                 val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 cb.setPrimaryClip(ClipData.newPlainText("Sens", text))
-                                Toast.makeText(context, "Berhasil Salin Semua Pengaturan!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Berhasil Salin Semua Sensitivitas!", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = RedNeon),
                             modifier = Modifier.fillMaxWidth()
@@ -250,14 +250,14 @@ jobs:
                             Text("SALIN SEMUA SENSITIVITAS (COPY ALL)", fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("SLIDER SENSITIVITAS (REKOMENDASI)", color = GoldNeon, fontWeight = FontWeight.Bold)
+                        Text("REKOMENDASI SENSITIVITAS KAMERA & ADS", color = GoldNeon, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
                     item {
                         SliderItem("TPP No Scope", tpp) { tpp = it }
-                        SliderItem("Red Dot / Holo", redDot) { redDot = it }
-                        SliderItem("3x Scope (Spray)", scope3x) { scope3x = it }
+                        SliderItem("Red Dot / Holographic", redDot) { redDot = it }
+                        SliderItem("3x Scope (Spray M416)", scope3x) { scope3x = it }
                         SliderItem("4x Scope", scope4x) { scope4x = it }
                         if (useGyro) {
                             SliderItem("Gyroscope 3x Scope", gyro3x, 400) { gyro3x = it }
@@ -289,11 +289,8 @@ jobs:
         }
         EOF
 
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v3
-
     - name: Build Debug APK
-      run: gradle assembleDebug --stacktrace
+      run: gradle assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK Ready to Download
       uses: actions/upload-artifact@v4
