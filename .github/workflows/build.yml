@@ -1,0 +1,302 @@
+name: Auto Build PUBG Sensitivity APK
+
+on:
+  push:
+    branches: [ "**" ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Generate Source Code & Project
+      run: |
+        mkdir -p app/src/main/java/com/sensipro/pubg
+        mkdir -p app/src/main/res/values
+
+        # 1. Root build.gradle
+        cat << 'EOF' > build.gradle
+        buildscript {
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath "com.android.tools.build:gradle:8.2.2"
+                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
+            }
+        }
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        EOF
+
+        # 2. settings.gradle
+        cat << 'EOF' > settings.gradle
+        include ':app'
+        rootProject.name = "PUBG Sensitivity Pro"
+        EOF
+
+        # 3. app/build.gradle
+        cat << 'EOF' > app/build.gradle
+        apply plugin: 'com.android.application'
+        apply plugin: 'kotlin-android'
+
+        android {
+            namespace 'com.sensipro.pubg'
+            compileSdk 34
+
+            defaultConfig {
+                applicationId "com.sensipro.pubg"
+                minSdk 26
+                targetSdk 34
+                versionCode 1
+                versionName "1.0.0"
+            }
+
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
+            }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+            kotlinOptions {
+                jvmTarget = '17'
+            }
+            buildFeatures {
+                compose true
+            }
+            composeOptions {
+                kotlinCompilerExtensionVersion '1.5.8'
+            }
+        }
+
+        dependencies {
+            implementation 'androidx.core:core-ktx:1.12.0'
+            implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+            implementation 'androidx.activity:activity-compose:1.8.2'
+            implementation platform('androidx.compose:compose-bom:2024.02.00')
+            implementation 'androidx.compose.ui:ui'
+            implementation 'androidx.compose.ui:ui-graphics'
+            implementation 'androidx.compose.material3:material3'
+            implementation 'androidx.compose.material:material-icons-extended:1.6.1'
+        }
+        EOF
+
+        # 4. AndroidManifest.xml
+        cat << 'EOF' > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application
+                android:allowBackup="true"
+                android:label="PUBG Sens Pro"
+                android:theme="@android:style/Theme.Material.NoActionBar">
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        # 5. MainActivity.kt (Logic & Gaming UI)
+        cat << 'EOF' > app/src/main/java/com/sensipro/pubg/MainActivity.kt
+        package com.sensipro.pubg
+
+        import android.app.ActivityManager
+        import android.content.ClipData
+        import android.content.ClipboardManager
+        import android.content.Context
+        import android.os.Build
+        import android.os.Bundle
+        import android.view.WindowManager
+        import android.widget.Toast
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.setContent
+        import androidx.compose.foundation.background
+        import androidx.compose.foundation.border
+        import androidx.compose.foundation.layout.*
+        import androidx.compose.foundation.lazy.LazyColumn
+        import androidx.compose.foundation.shape.RoundedCornerShape
+        import androidx.compose.material3.*
+        import androidx.compose.runtime.*
+        import androidx.compose.ui.Alignment
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.graphics.Color
+        import androidx.compose.ui.platform.LocalContext
+        import androidx.compose.ui.text.font.FontWeight
+        import androidx.compose.ui.unit.dp
+        import androidx.compose.ui.unit.sp
+        import kotlin.math.roundToInt
+
+        val DarkBg = Color(0xFF0F0F13)
+        val CardBg = Color(0xFF181820)
+        val RedNeon = Color(0xFFFF2A4B)
+        val GoldNeon = Color(0xFFFFB800)
+        val CardBorder = Color(0xFF282836)
+
+        class MainActivity : ComponentActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContent {
+                    MaterialTheme(colorScheme = darkColorScheme(background = DarkBg)) {
+                        PubgSensApp()
+                    }
+                }
+            }
+        }
+
+        @Composable
+        fun PubgSensApp() {
+            val context = LocalContext.current
+            val brand = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+            val model = Build.MODEL
+            
+            val actManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val memInfo = ActivityManager.MemoryInfo()
+            actManager.getMemoryInfo(memInfo)
+            val ram = (memInfo.totalMem / (1024 * 1024 * 1024.0)).roundToInt()
+
+            var refreshRate by remember { mutableStateOf(60) }
+            LaunchedEffect(Unit) {
+                val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                @Suppress("DEPRECATION")
+                refreshRate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    context.display?.mode?.refreshRate?.roundToInt() ?: 60
+                } else {
+                    wm.defaultDisplay?.mode?.refreshRate?.roundToInt() ?: 60
+                }
+            }
+
+            var useGyro by remember { mutableStateOf(true) }
+            var playstyle by remember { mutableStateOf("Spray Stabil (M416)") }
+            
+            val mult = if (refreshRate >= 90) 0.92f else 1.05f
+
+            // Data Sensitivitas
+            var tpp by remember { mutableStateOf((115 * mult).toInt()) }
+            var redDot by remember { mutableStateOf((55 * mult).toInt()) }
+            var scope3x by remember { mutableStateOf((28 * mult).toInt()) }
+            var scope4x by remember { mutableStateOf((20 * mult).toInt()) }
+            var gyro3x by remember { mutableStateOf(if (useGyro) 260 else 0) }
+
+            Scaffold(containerColor = DarkBg) { padding ->
+                LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+                    item {
+                        Text("PUBG SENSITIVITY PRO", color = RedNeon, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                        Text("Hardware: $brand $model | ${refreshRate}Hz | ${ram}GB RAM", color = Color.Gray, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().border(1.dp, CardBorder, RoundedCornerShape(12.dp)),
+                            colors = CardDefaults.cardColors(containerColor = CardBg)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text("GAYA BERMAIN & GYROSCOPE", color = GoldNeon, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Aktifkan Gyroscope", color = Color.White, modifier = Modifier.weight(1f))
+                                    Switch(checked = useGyro, onCheckedChange = { useGyro = it })
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+
+                    item {
+                        Button(
+                            onClick = {
+                                val text = """
+                                [PUBG SENSITIVITY PRO RESULT]
+                                HP: $brand $model (${refreshRate}Hz)
+                                TPP No Scope: $tpp%
+                                Red Dot: $redDot%
+                                3x Scope: $scope3x%
+                                4x Scope: $scope4x%
+                                Gyro 3x Scope: $gyro3x%
+                                """.trimIndent()
+                                val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                cb.setPrimaryClip(ClipData.newPlainText("Sens", text))
+                                Toast.makeText(context, "Berhasil Salin Semua Pengaturan!", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = RedNeon),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("SALIN SEMUA SENSITIVITAS (COPY ALL)", fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("SLIDER SENSITIVITAS (REKOMENDASI)", color = GoldNeon, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    item {
+                        SliderItem("TPP No Scope", tpp) { tpp = it }
+                        SliderItem("Red Dot / Holo", redDot) { redDot = it }
+                        SliderItem("3x Scope (Spray)", scope3x) { scope3x = it }
+                        SliderItem("4x Scope", scope4x) { scope4x = it }
+                        if (useGyro) {
+                            SliderItem("Gyroscope 3x Scope", gyro3x, 400) { gyro3x = it }
+                        }
+                    }
+                }
+            }
+        }
+
+        @Composable
+        fun SliderItem(name: String, value: Int, max: Int = 200, onChange: (Int) -> Unit) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).border(1.dp, CardBorder, RoundedCornerShape(8.dp)),
+                colors = CardDefaults.cardColors(containerColor = CardBg)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(name, color = Color.White, fontSize = 14.sp)
+                        Text("$value%", color = GoldNeon, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = value.toFloat(),
+                        onValueChange = { onChange(it.toInt()) },
+                        valueRange = 0f..max.toFloat(),
+                        colors = SliderDefaults.colors(thumbColor = RedNeon, activeTrackColor = RedNeon)
+                    )
+                }
+            }
+        }
+        EOF
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+
+    - name: Build Debug APK
+      run: gradle assembleDebug --stacktrace
+
+    - name: Upload APK Ready to Download
+      uses: actions/upload-artifact@v4
+      with:
+        name: PUBG-Sensitivity-Pro-APK
+        path: app/build/outputs/apk/debug/*.apk
