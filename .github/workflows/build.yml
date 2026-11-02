@@ -24,37 +24,57 @@ jobs:
       with:
         gradle-version: '8.5'
 
-    - name: Generate Source Code & Project
+    - name: Accept Android SDK Licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+    - name: Generate Complete Source Code
       run: |
         mkdir -p app/src/main/java/com/sensipro/pubg
+        mkdir -p app/src/main/res/values
 
-        # 1. Root build.gradle
-        cat << 'EOF' > build.gradle
-        buildscript {
+        # 1. gradle.properties
+        cat << 'EOF' > gradle.properties
+        android.useAndroidX=true
+        android.nonTransitiveRClass=true
+        org.gradle.jvmargs=-Xmx2048m
+        EOF
+
+        # 2. settings.gradle
+        cat << 'EOF' > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
             repositories {
                 google()
                 mavenCentral()
             }
+        }
+        rootProject.name = "PUBGSensPro"
+        include ':app'
+        EOF
+
+        # 3. Root build.gradle
+        cat << 'EOF' > build.gradle
+        buildscript {
             dependencies {
                 classpath "com.android.tools.build:gradle:8.2.2"
                 classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
             }
         }
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
-            }
+        plugins {
+            id 'com.android.application' version '8.2.2' apply false
+            id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
         }
         EOF
 
-        # 2. settings.gradle
-        cat << 'EOF' > settings.gradle
-        include ':app'
-        rootProject.name = "PUBGSensPro"
-        EOF
-
-        # 3. app/build.gradle
+        # 4. app/build.gradle
         cat << 'EOF' > app/build.gradle
         plugins {
             id 'com.android.application'
@@ -100,11 +120,12 @@ jobs:
             implementation platform('androidx.compose:compose-bom:2024.02.00')
             implementation 'androidx.compose.ui:ui'
             implementation 'androidx.compose.ui:ui-graphics'
+            implementation 'androidx.compose.foundation:foundation'
             implementation 'androidx.compose.material3:material3'
         }
         EOF
 
-        # 4. AndroidManifest.xml
+        # 5. AndroidManifest.xml
         cat << 'EOF' > app/src/main/AndroidManifest.xml
         <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -125,7 +146,7 @@ jobs:
         </manifest>
         EOF
 
-        # 5. MainActivity.kt (Logic & Gaming UI)
+        # 6. MainActivity.kt
         cat << 'EOF' > app/src/main/java/com/sensipro/pubg/MainActivity.kt
         package com.sensipro.pubg
 
@@ -281,8 +302,7 @@ jobs:
                     Slider(
                         value = value.toFloat(),
                         onValueChange = { onChange(it.toInt()) },
-                        valueRange = 0f..max.toFloat(),
-                        colors = SliderDefaults.colors(thumbColor = RedNeon, activeTrackColor = RedNeon)
+                        valueRange = 0f..max.toFloat()
                     )
                 }
             }
